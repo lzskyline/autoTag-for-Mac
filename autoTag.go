@@ -9,14 +9,15 @@ import (
 )
 
 // 准备匹配、打标签的关键字列表
-var keywords = []string{"零信任", "SDL", "等保", "字节跳动", "DDoS", "HIDS", "WAF", "物联网", "数据安全", "BAS", "58同城", "长亭", "NIDS", "Java安全"}
+var keywords = []string{"零信任", "SDL", "等保", "字节跳动", "DDoS", "HIDS", "WAF", "物联网", "数据安全", "BAS", "58同城", "长亭", "NIDS", "Java安全", "应用安全", "安全规范"}
 
 // 检查文件名是否包含关键字，并返回匹配到的关键字
-func checkKeywords(filename string) string {
+func checkKeywords(path string, filename string) string {
 	for _, keyword := range keywords {
 		// 忽略大小写
 		if strings.Contains(strings.ToLower(filename), strings.ToLower(keyword)) {
-			return keyword
+			addTag(path, keyword)
+			fmt.Printf("文件 %s 增加了标签 %s\n", path, keyword)
 		}
 	}
 	return ""
@@ -43,15 +44,7 @@ func walkDir(dir string) error {
 			// 取文件名
 			filename := info.Name()
 			// 检查文件名是否包含关键字
-			keyword := checkKeywords(filename)
-			if keyword != "" {
-				// 给文件增加一个以关键字命名的Mac标签
-				err := addTag(path, keyword)
-				if err != nil {
-					return err
-				}
-				fmt.Printf("文件 %s 增加了标签 %s\n", path, keyword)
-			}
+			checkKeywords(path, filename)
 		}
 		return nil
 	})
@@ -59,7 +52,7 @@ func walkDir(dir string) error {
 
 func main() {
 	// 定义一个目录变量，可以根据需要修改
-	dir := "/Users/lzskyline/Docs"
+	dir := "/Users/lzskyline/"
 	// 遍历打标签
 	err := walkDir(dir)
 	if err != nil {
