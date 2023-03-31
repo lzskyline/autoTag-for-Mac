@@ -2,59 +2,88 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// 准备匹配、打标签的关键字列表
-var keywords = []string{"零信任", "SDL", "等保", "字节跳动", "DDoS", "HIDS", "WAF", "物联网", "数据安全", "BAS", "58同城", "长亭", "NIDS", "Java安全", "应用安全", "安全规范"}
+type Rule struct {
+	Keyword string
+	Tags    []string
+}
 
-// 检查文件名是否包含关键字，并返回匹配到的关键字
-func checkKeywords(path string, filename string) string {
-	for _, keyword := range keywords {
+// 准备匹配、打标签的关键字列表
+var rules = []Rule{
+	{"反入侵", []string{"IDS", "WAF", "HIDS", "反入侵"}},
+	{"等保", []string{"等级保护", "等保"}},
+}
+
+func checkKeywords(path string, contentSearch bool) ([]string, error) {
+	filename := filepath.Base(path)
+	matchedTags := make([]string, 0)
+	for _, rule := range rules {
 		// 忽略大小写
-		if strings.Contains(strings.ToLower(filename), strings.ToLower(keyword)) {
-			addTag(path, keyword)
-			fmt.Printf("文件 %s 增加了标签 %s\n", path, keyword)
+		if strings.Contains(strings.ToLower(filename), strings.ToLower(rule.Keyword)) {
+			matchedTags = append(matchedTags, rule.Tags...)
 		}
 	}
-	return ""
+	// 如果需要基于文件内容检索
+	if contentSearch {
+		content, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, rule := range rules {
+			if strings.Contains(strings.ToLower(string(content)), strings.ToLower(rule.Keyword)) {
+				matchedTags = append(matchedTags, rule.Tags...)
+			}
+		}
+	}
+	return matchedTags, nil
 }
 
-// 给文件增加一个Mac标签
-func addTag(filename, tag string) error {
-	// 使用xattr命令来设置文件的扩展属性，其中com.apple.metadata:_kMDItemUserTags是用于存储Mac标签的属性
-	cmd := fmt.Sprintf("xattr -w com.apple.metadata:_kMDItemUserTags '(\"%s\")' \"%s\"", tag, filename)
-	// 使用os/exec包来执行命令
-	_, err := exec.Command("sh", "-c", cmd).Output()
-	return err
+func addTag(filename string, tags []string) error {
+	if len(tags) > 0 {
+		for _, tag := range tags {
+			cmd := fmt.Sprintf("xattr -w com.apple.metadata:_kMDItemUserTags '(\"%s\")' \"%s\"", tag, filename)
+			_, err := exec.Command("sh", "-c", cmd).Output()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
-// 遍历指定目录下的所有文件，并调用checkKeywords和addTag函数
-func walkDir(dir string) error {
-	// 使用filepath包来遍历目录
+func walkDir(dir string, contentSearch bool) error {
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		// 如果不是目录
 		if !info.IsDir() {
-			// 取文件名
-			filename := info.Name()
-			// 检查文件名是否包含关键字
-			checkKeywords(path, filename)
+			tags, err := checkKeywords(path, contentSearch)
+			if err != nil {
+				return err
+			}
+			err = addTag(path, tags)
+			if err != nil {
+				return err
+			}
+			if len(tags) > 0 {
+				fmt.Printf("文件 %s 增加了标签 %v\n", path, tags)
+			}
 		}
 		return nil
 	})
 }
 
 func main() {
-	// 定义一个目录变量，可以根据需要修改
-	dir := "/Users/lzskyline/"
-	// 遍历打标签
-	err := walkDir(dir)
+	dir := "/path/to/your/directory" // 修改为你需要处理的目录
+	contentSearch := true            // 根据需要设置为true或false，决定是否需要基于文件内容检索
+
+	err := walkDir(dir, contentSearch)
 	if err != nil {
 		fmt.Println(err)
 	}
